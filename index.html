@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>记账本 - 简单好用的个人记账工具</title>
+  <style>
+    :root {
+      --primary: #2d6a4f;
+      --primary-light: #40916c;
+      --accent: #d4a373;
+      --bg: #fefae0;
+      --card: #ffffff;
+      --text: #1b4332;
+      --text-light: #52796f;
+      --border: #d4a37340;
+      --income: #2d6a4f;
+      --expense: #c1121f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem; }
+    header { text-align: center; margin-bottom: 1.5rem; }
+    header h1 { font-size: 1.8rem; color: var(--primary); margin-bottom: 0.3rem; }
+    header p { color: var(--text-light); font-size: 0.85rem; }
+
+    .month-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
+    .month-nav button { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 1rem; cursor: pointer; font-size: 1rem; color: var(--text); }
+    .month-nav button:hover { background: var(--primary); color: white; border-color: var(--primary); }
+    .month-nav .current-month { font-size: 1.1rem; font-weight: 600; min-width: 120px; text-align: center; }
+
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; }
+    .summary-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; text-align: center; }
+    .summary-card .label { font-size: 0.75rem; color: var(--text-light); margin-bottom: 0.3rem; }
+    .summary-card .amount { font-size: 1.2rem; font-weight: 700; }
+    .summary-card.income .amount { color: var(--income); }
+    .summary-card.expense .amount { color: var(--expense); }
+    .summary-card.balance .amount { color: var(--primary); }
+    .summary-card.balance.negative .amount { color: var(--expense); }
+    .budget-bar { margin-top: 0.5rem; background: var(--bg); border-radius: 6px; height: 8px; overflow: hidden; }
+    .budget-bar .fill { height: 100%; background: var(--primary); border-radius: 6px; transition: width 0.3s; }
+    .budget-bar .fill.over { background: var(--expense); }
+    .budget-card { position: relative; }
+    .budget-card .budget-info { font-size: 0.7rem; color: var(--text-light); margin-top: 0.3rem; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .card-header h2 { font-size: 0.9rem; color: var(--primary); }
+    .card-header .actions { display: flex; gap: 0.5rem; }
+    .btn { padding: 0.3rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--card); cursor: pointer; font-size: 0.8rem; color: var(--text); }
+    .btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+    .btn-danger { border-color: #c1121f40; color: var(--expense); }
+    .btn-danger:hover { background: var(--expense); color: white; border-color: var(--expense); }
+
+    /* Form */
+    .add-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; }
+    @media (max-width: 480px) { .add-form { grid-template-columns: 1fr; } }
+    .form-group { display: flex; flex-direction: column; gap: 0.2rem; }
+    .form-group label { font-size: 0.75rem; color: var(--text-light); }
+    .form-group input, .form-group select {
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+    .form-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+    .form-row .form-group { flex: 1; }
+    .add-btn { padding: 0.5rem 1.5rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; white-space: nowrap; }
+    .add-btn:hover { background: var(--primary-light); }
+
+    /* Record list */
+    .record-list { max-height: 300px; overflow-y: auto; }
+    .record-item { display: flex; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--border); gap: 0.8rem; }
+    .record-item:last-child { border-bottom: none; }
+    .record-item .icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    .record-item .info { flex: 1; min-width: 0; }
+    .record-item .info .title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .record-item .info .meta { font-size: 0.75rem; color: var(--text-light); }
+    .record-item .amount { font-weight: 600; font-size: 0.95rem; flex-shrink: 0; }
+    .record-item .amount.income { color: var(--income); }
+    .record-item .amount.expense { color: var(--expense); }
+    .record-item .delete-btn { opacity: 0; background: none; border: none; cursor: pointer; font-size: 0.8rem; color: var(--expense); padding: 0.2rem 0.4rem; transition: opacity 0.2s; flex-shrink: 0; }
+    .record-item:hover .delete-btn { opacity: 1; }
+
+    .empty { text-align: center; padding: 2rem; color: var(--text-light); font-size: 0.85rem; }
+
+    /* Charts */
+    .chart-wrap { position: relative; height: 200px; }
+    .chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+    /* Category breakdown */
+    .category-list { margin-top: 1rem; }
+    .category-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    .category-item:last-child { border-bottom: none; }
+    .category-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .category-item .name { flex: 1; color: var(--text-light); }
+    .category-item .amount { font-weight: 600; }
+    .category-item .pct { color: var(--text-light); font-size: 0.75rem; min-width: 40px; text-align: right; }
+
+    /* Budget setting */
+    .budget-setting { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.8rem; }
+    .budget-setting input { width: 100px; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; background: var(--bg); outline: none; }
+    .budget-setting input:focus { border-color: var(--primary); }
+    .budget-setting span { font-size: 0.8rem; color: var(--text-light); }
+
+    /* Footer */
+    footer { text-align: center; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--text-light); font-size: 0.75rem; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: var(--card); border-radius: 16px; padding: 1.5rem; width: 90%; max-width: 400px; }
+    .modal h3 { margin-bottom: 1rem; color: var(--primary); }
+    .modal .form-group { margin-bottom: 0.8rem; }
+    .modal-btns { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>💰 记账本</h1>
+      <p>你的个人收支记录工具 · 数据仅存在本地浏览器</p>
+    </header>
+
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">◀</button>
+      <span class="current-month" id="currentMonth">2026年4月</span>
+      <button onclick="changeMonth(1)">▶</button>
+    </div>
+
+    <!-- 收支概览 -->
+    <div class="summary-grid">
+      <div class="summary-card income">
+        <div class="label">本月收入</div>
+        <div class="amount" id="monthIncome">¥0</div>
+      </div>
+      <div class="summary-card expense">
+        <div class="label">本月支出</div>
+        <div class="amount" id="monthExpense">¥0</div>
+      </div>
+      <div class="summary-card balance" id="balanceCard">
+        <div class="label">本月结余</div>
+        <div class="amount" id="monthBalance">¥0</div>
+        <div class="budget-bar"><div class="fill" id="budgetFill"></div></div>
+        <div class="budget-info" id="budgetInfo"></div>
+      </div>
+    </div>
+
+    <!-- 添加记录 -->
+    <div class="card">
+      <div class="card-header">
+        <h2>📝 记一笔</h2>
+        <button class="btn" onclick="toggleForm()">展开</button>
+      </div>
+      <div id="addFormContainer" style="display:none;">
+        <div class="add-form">
+          <div class="form-group">
+            <label>类型</label>
+            <select id="type">
+              <option value="expense">💸 支出</option>
+              <option value="income">💰 收入</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>金额（¥）</label>
+            <input type="number" id="amount" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>分类</label>
+            <select id="category"></select>
+          </div>
+          <div class="form-group">
+            <label>日期</label>
+            <input type="date" id="date">
+          </div>
+          <div class="form-group" style="grid-column: 1/-1;">
+            <label>备注（可选）</label>
+            <input type="text" id="note" placeholder="随便写点什么...">
+          </div>
+        </div>
+        <button class="add-btn" onclick="addRecord()">添加记录</button>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top: 1rem;">
+      <!-- 记录列表 -->
+      <div class="card">
+        <div class="card-header">
+          <h2>📋 收支记录</h2>
+          <div class="actions">
+            <button class="btn" onclick="exportCSV()">导出</button>
+            <button class="btn btn-danger" onclick="clearMonth()">清空</button>
+          </div>
+        </div>
+        <div class="record-list" id="recordList">
+          <div class="empty">本月还没有记录～</div>
+        </div>
+      </div>
+
+      <!-- 图表 -->
+      <div class="card">
+        <div class="card-header">
+          <h2>📊 支出分析</h2>
+          <select id="chartType" onchange="renderCharts()" style="border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.5rem;font-size:0.8rem;background:var(--bg);">
+            <option value="pie">分类占比</option>
+            <option value="bar">月度趋势</option>
+          </select>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="mainChart"></canvas>
+        </div>
+        <div class="category-list" id="categoryList"></div>
+      </div>
+    </div>
+
+    <!-- 预算设置 -->
+    <div class="card" style="margin-top: 1rem;">
+      <div class="card-header">
+        <h2>🎯 月预算</h2>
+      </div>
+      <div class="budget-setting">
+        <span>每月预算：¥</span>
+        <input type="number" id="budgetInput" placeholder="设置月预算" onchange="saveBudget()">
+        <span>元</span>
+        <span style="margin-left:1rem;color:var(--text-light);font-size:0.8rem;" id="budgetStatus"></span>
+      </div>
+    </div>
+
+    <footer>
+      数据仅存储在本地浏览器 · 换设备后数据不迁移 · 建议定期导出备份
+    </footer>
+  </div>
+
+  <div class="modal-overlay hidden" id="confirmModal">
+    <div class="modal">
+      <h3 id="modalTitle">确认操作</h3>
+      <p id="modalMsg" style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem;"></p>
+      <div class="modal-btns">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn btn-danger" id="modalConfirm">确认</button>
+      </div>
+    </div>
+  </div>
+
+<script src="./chart.js"></script>
+<script>
+// ============ 数据 ============
+const STORAGE_KEY = 'expense-tracker-records';
+const BUDGET_KEY = 'expense-tracker-budget';
+
+const EXPENSE_CATEGORIES = [
+  { name: '餐饮', icon: '🍜', color: '#e76f51' },
+  { name: '交通', icon: '🚌', color: '#f4a261' },
+  { name: '购物', icon: '🛒', color: '#e9c46a' },
+  { name: '居住', icon: '🏠', color: '#2a9d8f' },
+  { name: '娱乐', icon: '🎮', color: '#264653' },
+  { name: '通讯', icon: '📱', color: '#a8dadc' },
+  { name: '医疗', icon: '💊', color: '#ef476f' },
+  { name: '美妆', icon: '💄', color: '#ffc8dd' },
+  { name: '运动', icon: '⚽', color: '#90be6d' },
+  { name: '咖啡', icon: '☕', color: '#8d6346' },
+  { name: '书籍', icon: '📚', color: '#457b9d' },
+  { name: '其它', icon: '📌', color: '#adb5bd' },
+];
+
+const INCOME_CATEGORIES = [
+  { name: '工资', icon: '💵', color: '#2d6a4f' },
+  { name: '奖金', icon: '🎁', color: '#40916c' },
+  { name: '投资', icon: '📈', color: '#52b788' },
+  { name: '兼职', icon: '💻', color: '#74c69d' },
+  { name: '退款', icon: '↩️', color: '#95d5b2' },
+  { name: '其它', icon: '💰', color: '#d8f3dc' },
+];
+
+let currentYear = new Date().getFullYear();
+let currentMonth = new Date().getMonth() + 1; // 1-12
+let records = [];
+let chart = null;
+let pendingAction = null;
+
+// ============ 初始化 ============
+function init() {
+  loadRecords();
+  loadBudget();
+  setupCategory();
+  document.getElementById('date').value = todayStr();
+  renderAll();
+}
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ============ 数据存取 ============
+function loadRecords() {
+  try { records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { records = []; }
+}
+
+function saveRecords() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function loadBudget() {
+  const b = localStorage.getItem(BUDGET_KEY);
+  if (b) document.getElementById('budgetInput').value = b;
+}
+
+// ============ 分类 ============
+function setupCategory() {
+  const type = document.getElementById('type').value;
+  const sel = document.getElementById('category');
+  const cats = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+  sel.innerHTML = cats.map(c => `<option value="${c.name}">${c.icon} ${c.name}</option>`).join('');
+}
+
+// ============ 渲染 ============
+function renderAll() {
+  updateMonthDisplay();
+  renderSummary();
+  renderRecordList();
+  renderCharts();
+  renderCategoryList();
+  updateBudget();
+}
+
+function updateMonthDisplay() {
+  document.getElementById('currentMonth').textContent = `${currentYear}年${currentMonth}月`;
+}
+
+function getMonthRecords() {
+  return records.filter(r => {
+    const d = new Date(r.date);
+    return d.getFullYear() === currentYear && d.getMonth() + 1 === currentMonth;
+  });
+}
+
+function renderSummary() {
+  const monthRecs = getMonthRecords();
+  const income = monthRecs.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0);
+  const expense = monthRecs.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
+  const balance = income - expense;
+
+  document.getElementById('monthIncome').textContent = '¥' + income.toFixed(0);
+  document.getElementById('monthExpense').textContent = '¥' + expense.toFixed(0);
+
+  const balanceEl = document.getElementById('monthBalance');
+  const balanceCard = document.getElementById('balanceCard');
+  balanceEl.textContent = (balance >= 0 ? '¥' : '-¥') + Math.abs(balance).toFixed(0);
+  balanceCard.classList.toggle('negative', balance < 0);
+}
+
+function updateBudget() {
+  const budget = parseFloat(localStorage.getItem(BUDGET_KEY)) || 0;
+  const monthRecs = getMonthRecords();
+  const expense = monthRecs.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0);
+  const budgetFill = document.getElementById('budgetFill');
+  const budgetInfo = document.getElementById('budgetInfo');
+  const budgetStatus = document.getElementById('budgetStatus');
+
+  if (budget > 0) {
+    const pct = Math.min(100, expense / budget * 100);
+    budgetFill.style.width = pct + '%';
+    budgetFill.classList.toggle('over', pct >= 100);
+    const remaining = budget - expense;
+    if (remaining >= 0) {
+      budgetStatus.textContent = `剩余 ¥${remaining.toFixed(0)}`;
+      budgetStatus.style.color = 'var(--income)';
+    } else {
+      budgetStatus.textContent = `超支 ¥${Math.abs(remaining).toFixed(0)}`;
+      budgetStatus.style.color = 'var(--expense)';
+    }
+  } else {
+    budgetFill.style.width = '0%';
+    budgetStatus.textContent = '';
+  }
+}
+
+function renderRecordList() {
+  const monthRecs = getMonthRecords().sort((a, b) => new Date(b.date) - new Date(a.date));
+  const list = document.getElementById('recordList');
+
+  if (monthRecs.length === 0) {
+    list.innerHTML = '<div class="empty">本月还没有记录～</div>';
+    return;
+  }
+
+  list.innerHTML = monthRecs.map(r => {
+    const cats = r.type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+    const cat = cats.find(c => c.name === r.category) || { icon: '📌', color: '#adb5bd' };
+    const dateStr = new Date(r.date).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+    return `
+      <div class="record-item">
+        <div class="icon" style="background:${cat.color}20;color:${cat.color}">${cat.icon}</div>
+        <div class="info">
+          <div class="title">${r.category}</div>
+          <div class="meta">${dateStr}${r.note ? ' · ' + r.note : ''}</div>
+        </div>
+        <div class="amount ${r.type}">${r.type === 'income' ? '+' : '-'}$${r.amount.toFixed(2)}</div>
+        <button class="delete-btn" onclick="deleteRecord('${r.id}')">✕</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderCharts() {
+  const chartType = document.getElementById('chartType').value;
+  const monthRecs = getMonthRecords();
+  const ctx = document.getElementById('mainChart').getContext('2d');
+
+  if (chart) { chart.destroy(); chart = null; }
+
+  if (chartType === 'pie') {
+    const expenseRecs = monthRecs.filter(r => r.type === 'expense');
+    if (expenseRecs.length === 0) {
+      document.getElementById('mainChart').getContext('2d').clearRect(0, 0, 400, 200);
+      return;
+    }
+
+    // Group by category
+    const map = {};
+    expenseRecs.forEach(r => {
+      map[r.category] = (map[r.category] || 0) + r.amount;
+    });
+    const labels = Object.keys(map);
+    const values = Object.values(map);
+    const colors = labels.map(l => {
+      const cat = EXPENSE_CATEGORIES.find(c => c.name === l);
+      return cat ? cat.color : '#adb5bd';
+    });
+
+    chart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.label}: ¥${ctx.raw.toFixed(0)}`
+            }
+          }
+        }
+      }
+    });
+  } else {
+    // Bar chart: last 6 months trend
+    const months = [];
+    const incomeData = [];
+    const expenseData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      months.push(`${y}年${m}月`);
+      const mRecs = records.filter(r => {
+        const rd = new Date(r.date);
+        return rd.getFullYear() === y && rd.getMonth() + 1 === m;
+      });
+      incomeData.push(mRecs.filter(r => r.type === 'income').reduce((s, r) => s + r.amount, 0));
+      expenseData.push(mRecs.filter(r => r.type === 'expense').reduce((s, r) => s + r.amount, 0));
+    }
+
+    chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [
+          { label: '收入', data: incomeData, backgroundColor: '#2d6a4f' },
+          { label: '支出', data: expenseData, backgroundColor: '#c1121f' },
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { font: { size: 11 } } }
+        },
+        scales: {
+          x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+          y: { ticks: { callback: v => '¥' + v }, grid: { color: '#d4a37320' } }
+        }
+      }
+    });
+  }
+}
+
+function renderCategoryList() {
+  const monthRecs = getMonthRecords().filter(r => r.type === 'expense');
+  const list = document.getElementById('categoryList');
+  if (monthRecs.length === 0) { list.innerHTML = ''; return; }
+
+  const map = {};
+  monthRecs.forEach(r => { map[r.category] = (map[r.category] || 0) + r.amount; });
+  const total = Object.values(map).reduce((s, v) => s + v, 0);
+  const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]);
+
+  list.innerHTML = sorted.map(([name, amount]) => {
+    const cat = EXPENSE_CATEGORIES.find(c => c.name === name);
+    const pct = total > 0 ? (amount / total * 100).toFixed(0) : 0;
+    return `
+      <div class="category-item">
+        <div class="dot" style="background:${cat ? cat.color : '#adb5bd'}"></div>
+        <span class="name">${cat ? cat.icon + ' ' : ''}${name}</span>
+        <span class="amount" style="color:${cat ? cat.color : '#adb5bd'}">¥${amount.toFixed(0)}</span>
+        <span class="pct">${pct}%</span>
+      </div>
+    `;
+  }).join('');
+}
+
+// ============ 操作 ============
+function addRecord() {
+  const type = document.getElementById('type').value;
+  const amount = parseFloat(document.getElementById('amount').value);
+  const category = document.getElementById('category').value;
+  const date = document.getElementById('date').value;
+  const note = document.getElementById('note').value.trim();
+
+  if (!amount || amount <= 0) { alert('请输入有效金额'); return; }
+  if (!date) { alert('请选择日期'); return; }
+
+  records.push({ id: Date.now().toString(), type, amount, category, date, note });
+  saveRecords();
+
+  document.getElementById('amount').value = '';
+  document.getElementById('note').value = '';
+  document.getElementById('date').value = todayStr();
+
+  renderAll();
+}
+
+function deleteRecord(id) {
+  records = records.filter(r => r.id !== id);
+  saveRecords();
+  renderAll();
+}
+
+function clearMonth() {
+  showModal('清空本月记录', `确定要删除 ${currentYear}年${currentMonth}月 的所有记录吗？此操作不可恢复。`, () => {
+    records = records.filter(r => {
+      const d = new Date(r.date);
+      return !(d.getFullYear() === currentYear && d.getMonth() + 1 === currentMonth);
+    });
+    saveRecords();
+    renderAll();
+  });
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+  renderAll();
+}
+
+function toggleForm() {
+  const container = document.getElementById('addFormContainer');
+  const btn = container.previousElementSibling.querySelector('.btn');
+  if (container.style.display === 'none') {
+    container.style.display = 'block';
+    btn.textContent = '收起';
+  } else {
+    container.style.display = 'none';
+    btn.textContent = '展开';
+  }
+}
+
+function saveBudget() {
+  const val = document.getElementById('budgetInput').value;
+  localStorage.setItem(BUDGET_KEY, val);
+  updateBudget();
+}
+
+function exportCSV() {
+  const monthRecs = getMonthRecords().sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (monthRecs.length === 0) { alert('本月没有记录可导出'); return; }
+
+  const header = '日期,类型,分类,金额,备注';
+  const rows = monthRecs.map(r => `${r.date},${r.type === 'income' ? '收入' : '支出'},${r.category},${r.amount},${r.note || ''}`);
+  const csv = [header, ...rows].join('\n');
+
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `记账_${currentYear}年${currentMonth}月.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============ Modal ============
+function showModal(title, msg, onConfirm) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalMsg').textContent = msg;
+  document.getElementById('confirmModal').classList.remove('hidden');
+  pendingAction = onConfirm;
+  document.getElementById('modalConfirm').onclick = () => { closeModal(); pendingAction(); };
+}
+
+function closeModal() {
+  document.getElementById('confirmModal').classList.add('hidden');
+  pendingAction = null;
+}
+
+// ============ Event listeners ============
+document.getElementById('type').addEventListener('change', setupCategory);
+
+init();
+</script>
+</body>
+</html>
